@@ -1,5 +1,6 @@
 import os
 import pickle
+import matplotlib.pyplot as plt  # Add this import statement
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ from utils.modeling import *
 # ------------------------------------------------------
 #                      APP CONSTANTS
 # ------------------------------------------------------
-REMOTE_DATA = 'coffee_analysis_w_sentiment.csv'
+REMOTE_DATA = 'Homicide Report.csv'
 
 
 # ------------------------------------------------------
@@ -32,84 +33,34 @@ b2 = B2(endpoint=os.environ['B2_ENDPOINT'],
 def get_data():
     # collect data frame of reviews and their sentiment
     b2.set_bucket(os.environ['B2_BUCKETNAME'])
-    df_coffee = b2.get_df(REMOTE_DATA)
-
-    # average sentiment scores for the whole dataset
-    benchmarks = df_coffee[['neg', 'neu', 'pos', 'compound']] \
-                    .agg(['mean', 'median'])
+    df_homicide = b2.get_df(REMOTE_DATA)
     
-    return df_coffee, benchmarks
+    # Filtering the dataset for relevant columns
+    agency_data = df_homicide[['Agency Type', 'Crime Solved']]
 
-
-@st.cache_resource
-def get_model():
-    with open('./model.pickle', 'rb') as f:
-        analyzer = pickle.load(f)
+    # Grouping the data by agency name and count the number of solved and unsolved cases
+    agency_counts = agency_data.groupby(['Agency Type', 'Crime Solved']).size().unstack(fill_value=0)
     
-    return analyzer
+    return df_homicide, agency_counts
 
-# ------------------------------------------------------
-#                         APP
-# ------------------------------------------------------
-# ------------------------------
-# PART 0 : Overview
-# ------------------------------
-st.write(
-'''
-# Review Sentiment Analysis
-We pull data from our Backblaze storage bucket, and render it in Streamlit.
-''')
+# Call the get_data() function to retrieve df_homicide and agency_counts
+df_homicide, agency_counts = get_data()
 
-df_coffee, benchmarks = get_data()
-analyzer = get_model()
+# Creating a Sidebar
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", ("Visualization", "View Data"))
 
-# ------------------------------
-# PART 1 : Filter Data
-# ------------------------------
-roast = st.selectbox("Select a roast:",
-                     df_coffee['roast'].unique())
+st.title("Homicides Report, 1980-2014 Data Analysis")
 
-loc_country = st.selectbox("Select a roaster location:",
-                     df_coffee['loc_country'].unique())
-
-df_filtered = filter_coffee(roast, loc_country, df_coffee)
-
-st.write(
-'''
-**Your filtered data:**
-''')
-
-st.dataframe(df_filtered)
-
-# ------------------------------
-# PART 2 : Plot
-# ------------------------------
-
-st.write(
-'''
-## Visualize
-Compare this subset of reviews with the rest of the data.
-'''
-)
-
-fig = plot_sentiment(df_filtered, benchmarks)
-st.plotly_chart(fig)
-
-# ------------------------------
-# PART 3 : Analyze Input Sentiment
-# ------------------------------
-
-st.write(
-'''
-## Custom Sentiment Check
-
-Compare these results with the sentiment scores of your own input.
-'''
-)
-
-text = st.text_input("Write a paragraph, if you like.", 
-                     "Your text here.")
-
-df_sentiment = get_sentence_sentiment(text, analyzer)
-
-st.dataframe(df_sentiment)
+if page == "Visualization":
+    st.header("Number of Solved and Unsolved Cases by Law Enforcement Agencies")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    agency_counts.plot(kind='bar', stacked=True, ax=ax)
+    ax.set_title("Number of Solved and Unsolved Cases by Law Enforcement Agencies")
+    ax.set_xlabel("Law Enforcement Agency")
+    ax.set_ylabel("Number of Cases")
+    ax.set_xticklabels(agency_counts.index, rotation=45, ha='right')
+    st.pyplot(fig)
+elif page == "View Data":
+    st.header("View Subset of Data")
+    st.dataframe(df_homicide.head(10))
