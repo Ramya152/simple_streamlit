@@ -1,6 +1,6 @@
 import os
 import pickle
-import matplotlib.pyplot as plt  # Add this import statement
+import matplotlib.pyplot as plt 
 
 import streamlit as st
 from dotenv import load_dotenv
